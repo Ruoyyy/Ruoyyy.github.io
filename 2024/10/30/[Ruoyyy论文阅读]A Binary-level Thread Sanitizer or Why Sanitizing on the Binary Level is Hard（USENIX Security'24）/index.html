@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 7.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"example.com","root":"/","scheme":"Gemini","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"always","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="[Ruoyyy论文阅读]A Binary-level Thread Sanitizer or Why Sanitizing on the Binary Level is Hard（USENIX Security&#39;24） 摘要 前人的限制：几乎所有的Sanitizer 都是在编译时注入插桩来工作的，这需要访问目标的源代码，而现在很多的黑盒fuzzing是没有源代码的。 本文贡献：将San">
+<meta property="og:type" content="article">
+<meta property="og:title" content="【论文阅读】A Binary-level Thread Sanitizer or Why Sanitizing on the Binary Level is Hard">
+<meta property="og:url" content="http://example.com/2024/10/30/[Ruoyyy%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB]A%20Binary-level%20Thread%20Sanitizer%20or%20Why%20Sanitizing%20on%20the%20Binary%20Level%20is%20Hard%EF%BC%88USENIX%20Security'24%EF%BC%89/index.html">
+<meta property="og:site_name" content="NSS">
+<meta property="og:description" content="[Ruoyyy论文阅读]A Binary-level Thread Sanitizer or Why Sanitizing on the Binary Level is Hard（USENIX Security&#39;24） 摘要 前人的限制：几乎所有的Sanitizer 都是在编译时注入插桩来工作的，这需要访问目标的源代码，而现在很多的黑盒fuzzing是没有源代码的。 本文贡献：将San">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://raw.githubusercontent.com/Ruoyyy/picgo/main/image-20241029173524926.png">
+<meta property="og:image" content="https://raw.githubusercontent.com/Ruoyyy/picgo/main/image-20241030164647509.png">
+<meta property="og:image" content="https://raw.githubusercontent.com/Ruoyyy/picgo/main/image-20241030175602968.png">
+<meta property="og:image" content="https://raw.githubusercontent.com/Ruoyyy/picgo/main/image-20241030202310950.png">
+<meta property="og:image" content="https://raw.githubusercontent.com/Ruoyyy/picgo/main/image-20241030204537042.png">
+<meta property="og:image" content="https://raw.githubusercontent.com/Ruoyyy/picgo/main/image-20241030205428610.png">
+<meta property="og:image" content="https://raw.githubusercontent.com/Ruoyyy/picgo/main/image-20241030205512907.png">
+<meta property="article:published_time" content="2024-10-30T13:18:51.000Z">
+<meta property="article:modified_time" content="2024-10-30T13:18:17.940Z">
+<meta property="article:author" content="Ruoyyy">
+<meta property="article:tag" content="Fuzzing">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://raw.githubusercontent.com/Ruoyyy/picgo/main/image-20241029173524926.png">
+
+<link rel="canonical" href="http://example.com/2024/10/30/[Ruoyyy%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB]A%20Binary-level%20Thread%20Sanitizer%20or%20Why%20Sanitizing%20on%20the%20Binary%20Level%20is%20Hard%EF%BC%88USENIX%20Security'24%EF%BC%89/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'en'
+  };
+</script>
+
+  <title>【论文阅读】A Binary-level Thread Sanitizer or Why Sanitizing on the Binary Level is Hard | NSS</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+<style>mjx-container[jax="SVG"] {
+  direction: ltr;
+}
+
+mjx-container[jax="SVG"] > svg {
+  overflow: visible;
+}
+
+mjx-container[jax="SVG"][display="true"] {
+  display: block;
+  text-align: center;
+  margin: 1em 0;
+}
+
+mjx-container[jax="SVG"][justify="left"] {
+  text-align: left;
+}
+
+mjx-container[jax="SVG"][justify="right"] {
+  text-align: right;
+}
+
+g[data-mml-node="merror"] > g {
+  fill: red;
+  stroke: red;
+}
+
+g[data-mml-node="merror"] > rect[data-background] {
+  fill: yellow;
+  stroke: none;
+}
+
+g[data-mml-node="mtable"] > line[data-line] {
+  stroke-width: 70px;
+  fill: none;
+}
+
+g[data-mml-node="mtable"] > rect[data-frame] {
+  stroke-width: 70px;
+  fill: none;
+}
+
+g[data-mml-node="mtable"] > .mjx-dashed {
+  stroke-dasharray: 140;
+}
+
+g[data-mml-node="mtable"] > .mjx-dotted {
+  stroke-linecap: round;
+  stroke-dasharray: 0,140;
+}
+
+g[data-mml-node="mtable"] > svg {
+  overflow: visible;
+}
+
+[jax="SVG"] mjx-tool {
+  display: inline-block;
+  position: relative;
+  width: 0;
+  height: 0;
+}
+
+[jax="SVG"] mjx-tool > mjx-tip {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+mjx-tool > mjx-tip {
+  display: inline-block;
+  padding: .2em;
+  border: 1px solid #888;
+  font-size: 70%;
+  background-color: #F8F8F8;
+  color: black;
+  box-shadow: 2px 2px 5px #AAAAAA;
+}
+
+g[data-mml-node="maction"][data-toggle] {
+  cursor: pointer;
+}
+
+mjx-status {
+  display: block;
+  position: fixed;
+  left: 1em;
+  bottom: 1em;
+  min-width: 25%;
+  padding: .2em .4em;
+  border: 1px solid #888;
+  font-size: 90%;
+  background-color: #F8F8F8;
+  color: black;
+}
+
+foreignObject[data-mjx-xml] {
+  font-family: initial;
+  line-height: normal;
+  overflow: visible;
+}
+
+.MathJax path {
+  stroke-width: 3;
+}
+
+mjx-container[display="true"] {
+  overflow: auto hidden;
+}
+
+mjx-container[display="true"] + br {
+  display: none;
+}
+</style><link rel="alternate" href="/atom.xml" title="NSS" type="application/atom+xml">
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">NSS</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+  <a href="https://github.com/Ruoyyy" class="github-corner" title="Follow me on GitHub" aria-label="Follow me on GitHub" rel="noopener" target="_blank"><svg width="80" height="80" viewBox="0 0 250 250" aria-hidden="true"><path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="en">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/10/30/[Ruoyyy%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB]A%20Binary-level%20Thread%20Sanitizer%20or%20Why%20Sanitizing%20on%20the%20Binary%20Level%20is%20Hard%EF%BC%88USENIX%20Security'24%EF%BC%89/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="https://raw.githubusercontent.com/Ruoyyy/picgo/main/微信图片_20240922005457.jpg">
+      <meta itemprop="name" content="Ruoyyy">
+      <meta itemprop="description" content="My Blog">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="NSS">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          【论文阅读】A Binary-level Thread Sanitizer or Why Sanitizing on the Binary Level is Hard
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+              
+
+              <time title="Created: 2024-10-30 21:18:51 / Modified: 21:18:17" itemprop="dateCreated datePublished" datetime="2024-10-30T21:18:51+08:00">2024-10-30</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h1 id="ruoyyy论文阅读a-binary-level-thread-sanitizer-or-why-sanitizing-on-the-binary-level-is-hardusenix-security24">[Ruoyyy论文阅读]A
+Binary-level Thread Sanitizer or Why Sanitizing on the Binary Level is
+Hard（USENIX Security'24）</h1>
+<h2 id="摘要">摘要</h2>
+<p><strong>前人的限制：</strong>几乎所有的Sanitizer
+都是在编译时注入插桩来工作的，这需要访问目标的源代码，而现在很多的黑盒fuzzing是没有源代码的。</p>
+<p><strong>本文贡献：</strong>将Sanitizer
+应用于仅二进制目标（无源码）的主要挑战。作为分析的结果，我们提出了
+BINTSAN 的设计和实现，这是一种实现针对纯二进制 Linux x86-64
+目标的数据竞争检测器 TSAN 的方法。</p>
+<p><strong>实验：</strong>与基于源的 TSAN 相比，本文方法的运行时开销仅为
+15%。与现有的二进制解决方案相比，本文方法具有更好的性能（性能提升高达
+5.0×）和精度，同时保持与基于编译器的 TSAN 的兼容性。</p>
+<h2 id="introduction">Introduction</h2>
+<p>背景简单来说就是，几乎所有的Sanitizer都是源码级别的，基本上在二进制上都是不可用的。这导致只有软件运行超时或者崩溃才会视为故障，这很低效。有些黑盒Fuzzing中会收集运行时反馈来确定故障，但这造成严重的性能损失。近年来有些二进制级别Fuzzing（Less
+Bloat CSS'21，Breaking through Binaries
+S&amp;P'21）专注于仿照优化编译器的技术优化模糊器，但结果也是不尽人意。<strong>大多数现有的仅二进制Sanitizer通常依赖于慢速动态检测方法。</strong></p>
+<p>所以新的技术诞生，如RETROWRITE（S&amp;P'20）就将ASAN移植到二进制级别了。本文是将TSAN移植到二进制级别。</p>
+<p>贡献：</p>
+<ul>
+<li><p>作者显先是<strong>证明</strong>了UBSAN是不可移植到二进制级别的，MSAN也是非常复杂的。</p></li>
+<li><p>提出了BINTSAN，专用于Linux
+x86_64的二进制Tsan，提出了一些措施来提高性能。</p></li>
+<li><p>和现有的工具进行了比较，不管是性能还是检测率都高于现有工具，并保持了和TSAN的兼容性，并开源https://github.com/CISPA-SysSec/binarytsan</p></li>
+</ul>
+<h2 id="二进制级别的sanitizer的难度">二进制级别的Sanitizer的难度</h2>
+<p>难度在于以下几点：</p>
+<p><strong>信息丢失：</strong>编译过程中导致的信息丢失，二进制Sanitizer需要重建这些编译过程中丢失的信息，包括控制流信息、类型、内存顺序、符号性和调试信息。</p>
+<p><strong>概念差异：</strong>程序的不同表示形式（源代码、中间表示
+（IR）
+和汇编）具有不同的属性，这可能会简化或阻碍静态分析。这里重点介绍x86-64
+程序集和 IR 之间的概念差异。</p>
+<p>如何判断这个工具是成功的：</p>
+<p><strong>正确性：</strong>必须保留目标程序的原有语义，不受插桩的影响</p>
+<p><strong>有效性：</strong>必须能有效检测问题和漏洞，应该能检测到源方法能检到的，最大可能减少漏报和误报。</p>
+<p><strong>性能：</strong>尽力减少运行时开销，不造成性能退化</p>
+<p><strong>兼容性：</strong>应与现有的模糊测试框架、管道或生态系统兼容，以便可以无缝地整合到现有工具中</p>
+<p><strong>可扩展性：</strong>二进制排错器应适用于尽可能多的商用现成
+（COTS）
+二进制文件，包括大型二进制文件、具有异常处理的二进制文件以及已混淆或剥离的二进制文件。</p>
+<p>现有的工具表现的怎样：</p>
+<p><strong>RETROWRITE（ASAN移植版）：</strong>RETROWRITE
+无法清理全局变量或单个堆栈对象。虽然 RETROWRITE 带有自己的 AFL
+检测进行模糊测试，并且与 ASAN 兼容，但其重写框架将其适用性限制为 PIC
+Linux 二进制文件，而无需 C++ 异常处理。尽管如此，它仍然会导致 50-70%
+的性能开销。</p>
+<p><strong>UBSAN：</strong>由于<strong>undefined
+行为</strong>的概念在二进制级别上已经是不复存在了，所以需要重新构建原始意图并且确实源码的行为是否未定义，这是很容易出错的。根据作者分析<strong>在
+UBSAN 提供的 28 项检查中，只有 10
+项可以针对二进制目标重新创建。</strong>没什么研究价值</p>
+<p><strong>MSAN：</strong>使用一大段论证MSAN的二进制版本具有很严重的性能开销。因为有影子内存和影子寄存器的存在，所以需要考虑影子传播，并且x86_64这样的CISC架构不适合影子寄存器传播。</p>
+<p><strong>TSAN：</strong>这里比较重要。首先，实现二进制级别的TSAN的挑战：</p>
+<ol type="1">
+<li>TSAN在源代码级别只需要对内存访问进行轻量级的插桩,并将检测逻辑委托给运行时库。</li>
+<li>但在编译过程中,原有的原子操作的内存序信息会丢失。C++中有6种可能的内存序,在实践中常用的有3种:松散内存序、获取-释放内存序和顺序-释放内存序。这些内存序模型与x86-64架构使用的总存储顺序(TSO)模型存在很大差异。</li>
+<li>同时,原子操作本身的信息也常常在编译过程中丢失。因此需要开发启发式方法来识别原子变量,以弥补这些信息的缺失。</li>
+</ol>
+<p><strong>在 C++ 中,有 6 种可能的内存序(memory order)：</strong></p>
+<ol type="1">
+<li><strong>松散内存序(relaxed)</strong>:
+这是最弱的内存序,只保证原子操作的原子性,不提供任何同步或排序保证。</li>
+<li><strong>获取-释放内存序(acquire-release)</strong>:
+这种内存序比松散内存序更强,提供了同步和排序保证。获取操作(acquire)保证在该操作之后的内存访问都能看到之前的修改,而释放操作(release)保证在该操作之前的修改都能被之后的获取操作看到。</li>
+<li><strong>顺序-释放内存序(sequential-release)</strong>:
+这种内存序比获取-释放内存序更强,保证了所有内存访问的顺序一致性。</li>
+</ol>
+<blockquote>
+<p>[!NOTE]</p>
+<h3 id="完全存储定序tsototal-store-order模型">完全存储定序（TSO:Total
+Store Order）模型</h3>
+<p>在<strong>内存一致性模型（Memory
+Consistency）</strong>中，内存读写（load/store）的4种存储顺序：</p>
+<figure class="highlight markdown"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">store-load</span><br><span class="line">store-store</span><br><span class="line">load-load</span><br><span class="line">load-store</span><br></pre></td></tr></table></figure>
+<p>在TSO模型下，store操作是不会立即写入内存，会先写到一个<strong>先进先出（FIFO）</strong>的store
+buffer队列中。上述这四种存储操作，允许<code>store-load</code>操作可以乱序，其他不允许。需要注意的是。这里的乱序是指不同CPU之间的乱序，在一个CPU自己的store
+buffer里面的数据输出之前，其他的CPU是无法看到的。只有CPU自身发起的load才能看到store
+buffer里面的数据。至于CPU何时将自己的store
+buffer里面的数据输出，是没有明确的界定。这<strong>和C++采用的内存序模型存在很大差异</strong>。这种模式和获取-释放内存序一样强,但比顺序一致性模型要弱。</p>
+</blockquote>
+<h2 id="bintsanbinary-thread-sanitizer">BINTSAN：binary thread
+sanitizer</h2>
+<figure>
+<img src="https://raw.githubusercontent.com/Ruoyyy/picgo/main/image-20241029173524926.png" alt="Overview">
+<figcaption aria-hidden="true">Overview</figcaption>
+</figure>
+<p>输入：需要插桩的二进制文件，通过二进制重写技术对其进行检测代码的插入。</p>
+<p>输出：经过检测代码插入的二进制文件与 TSAN
+运行时库动态链接，可用于测试目标是否存在潜在的数据竞争。</p>
+<h3 id="二进制重写框架">二进制重写框架</h3>
+<h4 id="什么是二进制重写技术">什么是二进制重写技术？</h4>
+<p>简单来说就是通过修改binary进行静态插桩，以实现类似于源码编译时的插桩操作。本文选择的是ZIPR（DSN'17）。它需要满足：</p>
+<p>1.x86-64 Linux ELF 二进制文件，并支持重写 PIC 和非 PIC 二进制文件</p>
+<p>2.避免使用启发式分析方法进行可能导致不正确二进制文件的重写（未满足）</p>
+<p>3.适用于 COTS 二进制文件，包括 C++ 异常处理</p>
+<p>4.支持用于指导清理的分析例程，
+例如，调用图和控制流图重建、寄存器分析等</p>
+<p>5.仅产生最小的运行时性能开销</p>
+<p>6.支持与现有模糊测试工具（例如 AFL 覆盖率反馈检测）集成</p>
+<p>7.可以使用调试信息（如果存在）（未满足）</p>
+<p>关于第7点，作者还维护了一个ZIPR1的版本以支持调试信息，可选择非强制。</p>
+<h3 id="数据竞争检测">数据竞争检测</h3>
+<ol type="1">
+<li>跟踪每个线程持有的锁,检测两个线程访问同一内存位置(至少有一个写操作)且没有持有同一个锁的情况,从而检测数据竞争。</li>
+<li>跟踪程序中事件的偏序关系(happens-before关系),检测两个来自不同线程的访问同一内存位置(至少有一个写操作)且彼此不存在happens-before关系的情况,从而检测数据竞争。</li>
+<li>提供了检测和报告数据竞争的接口,供BINTSAN在二进制级别进行插桩使用。</li>
+<li>对于C++原子操作,TSAN的运行时库需要知道使用的内存序,以正确创建同步事件。</li>
+</ol>
+<h3 id="instrumentation">Instrumentation</h3>
+<p>BINTSAN还模仿TSAN，检测到数据竞争时输出有意义的堆栈调用</p>
+<p>来看个例子：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">mov cs: Global , edi</span><br><span class="line">retn</span><br></pre></td></tr></table></figure>
+<p>将第一个参数分配给全局变量的函数编译后</p>
+<p>TSAN如何处理它：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">push rbx</span><br><span class="line">mov ebx, edi</span><br><span class="line">mov rdi , [ rsp +0 x8 ]</span><br><span class="line">call __tsan_func_entry</span><br><span class="line">mov edi, offset Global</span><br><span class="line">call __tsan_write4</span><br><span class="line">mov cs: Global , ebx</span><br><span class="line">call __tsan_func_exit</span><br><span class="line">pop rbx 10 retn</span><br></pre></td></tr></table></figure>
+<p>第 3、4 和 8 行是用于管理影子堆栈的调用堆栈检测。第 5 和第 6
+行是内存访问本身的检测。它们插入在第 7
+行中写入全局变量的原始指令之前。第 5
+行将指向全局变量的指针加载到参数寄存器 rdi 中。第 6 行中对 TSAN
+库的以下函数调用检查内存访问是否存在数据竞争。其余指令用于保存状态。第 1
+行和第 9 行保存和恢复寄存器 rbx
+的状态；因此，可以在两者之间自由使用。在第 2 行中，现在可以使用 rbx
+来保存函数参数，以便 rdi 可以用作第 4 行中调用堆栈检测调用的参数。</p>
+<h4 id="插桩">插桩</h4>
+<p>BINTSAN遍历所有的指令并识别访问内存的所有操作数，并插入相应的插桩代码，并且对于每个内存访问，都会识别（<strong>访问地址，访问类型，受影响的字节数</strong>）这三个属性，并将属性传递给运行时库，后两个属性是静态的，第一个属性可以通过获取函数<code>__tsan_write4()</code>的第一个参数（一个例子），<code>__tsan_write4()</code>是用于报告一个4字节的写访问操作。</p>
+<h4 id="复杂的x86_64指令集">复杂的x86_64指令集</h4>
+<p>另一个挑战是高度复杂的 x86-64
+指令集，其中包含各种内存访问方法。目前，BINTSAN
+涵盖了<strong>显式操作数、条件内存操作数和字符串指令</strong>的使用。这些是通过重新创建条件检查或分别计算字符串操作的访问内存的长度来处理的。BINTSAN
+的 prototype implementation 不处理一些容易出现竞争条件的指令。不处理 in
+或 out 等 I/O
+指令，因为这些指令具有特权，不能在用户空间应用程序中使用。此外，也不会处理像
+maskmovdqu
+这样的指令，这些指令具有隐式内存操作数，但不符合特定的指令类。根据我们的经验，这些说明在实践中很少使用。</p>
+<h3 id="状态存储">状态存储</h3>
+<p>这里涉及到一个难点：如何在每个检测点之后，恢复到检测之前的状态以保持原始程序语义不改变？</p>
+<p>作者的解决方法是BINTSAN 在每个插桩点的开头存储各种
+registers，并在退出插桩代码后恢复原始值。这包括根据<strong>System V
+ABI在函数调用期间不维护的所有通用寄存器、RFLAGS寄存器和XMM寄存器xmm0到xmm15</strong>。其他寄存器（如
+FPU 寄存器）不会保存和恢复，因为 TSAN 运行时库不使用它们。</p>
+<p>这里为了最大限度减少开销，作者还在后续章节中阐述了优化方法，包括<strong>最小化已使用的寄存器集合</strong>以及<strong>自定义“死亡”寄存器集合</strong>等等，这部分在后面阐述。</p>
+<h3 id="函数调用输出">函数调用输出</h3>
+<p>BINTSAN已经足以检测内存访问和数据竞争了，但是为了更好移植TSAN，BINTSAN还需要生成具有有意义的堆栈跟踪的错误消息，还需要支持
+TSAN 运行时库的自定义影子堆栈实现。</p>
+<ol type="1">
+<li>这需要通过调用 <code>__tsan_func_entry()</code> 和
+<code>__tsan_func_exit()</code> 函数来跟踪每个线程的当前调用栈。</li>
+<li>BINTSAN 支持三种函数退出方式:
+<ul>
+<li>通过 <code>ret</code> 指令退出,在返回语句前直接插入函数调用。</li>
+<li>通过 <code>jmp</code> 指令退出(尾调用优化)，将 <code>jmp</code>
+指令转换为常规的函数调用和返回指令,然后应用常规的调用栈instrumentation。但前提是被调用函数不能通过栈传递参数。</li>
+<li>通过栈展开退出，BINTSAN 会创建并插入一个新的着陆点(landing
+pad)，在这里调用 <code>__tsan_func_exit()</code> 函数。</li>
+</ul></li>
+<li>对于无法确认是否通过栈传递参数的函数，BINTSAN 会选择跳过调用栈
+instrumentation。</li>
+</ol>
+<h3 id="原子操作">原子操作</h3>
+<ol type="1">
+<li>BINTSAN 能够检测 x86-64 汇编中带有 <code>lock</code> 前缀的指令以及
+<code>xchg</code> 指令，并将其识别为原子操作。</li>
+<li>但是,编译器有时会生成一些无法推断出是否包含原子操作的汇编代码，这是由于高级语言(如
+C++)的内存模型和原子操作与 x86-64 架构之间的差异造成的。</li>
+<li>这给 BINTSAN 带来了多个问题:
+<ul>
+<li>如果无法检测到原子操作，BINTSAN 无法模拟 TSAN
+对这些操作的特殊处理,可能导致误报。</li>
+<li>原子操作可以创建同步事件，如自旋锁（循环等待判断资源是否已经释放）。如果
+BINTSAN 无法检测到这些原子操作，就会丢失同步事件，也可能导致误报。</li>
+</ul></li>
+<li>另一个问题是，TSAN
+运行时库依赖于知道原子操作使用的内存顺序,以创建正确的同步事件。但
+BINTSAN
+无法总是正确推断出二进制代码中使用的内存顺序。如果推断失败,BINTSAN
+会将原子指令视为具有获取、释放或获取-释放内存顺序，这可能导致检测到不存在于
+C++ 代码中的同步事件,从而产生误报。</li>
+<li>最后，TSAN 要求所有原子操作都在 TSAN 库内执行。对于 C++ 的原子操作
+<code>compare_exchange</code>，BINTSAN
+需要替换原子指令并调用库函数，并确保正确传递寄存器参数和复制标志位。</li>
+</ol>
+<h3 id="启发式">启发式</h3>
+<p>为了减少未检测到原子指令的影响，BINTSAN 实现了三种启发式方法:</p>
+<ol type="1">
+<li>静态变量的初始化默认是安全的，为了实现线程安全，编译器如GCC或Clang会引入一个<strong>守护变量</strong>来记录初始化状态。BINTSAN可以检测这些对这些守护变量的访问操作，并将其标记为带有<strong>获取（acquire）</strong>内存顺序的原子操作</li>
+<li>如果一个函数内对同一个内存（局部变量）的访问至少有一次是原子的，那么该函数内对该变量的所有访问都被标记为原子操作。作者认为，开发者如果在访问一个变量考虑到并发问题，那么默认他对这个变量所有的访问都是原子的（同样适用于C++的<code>std::atomic</code>，因为对它们任何的访问操作都是原子的。）这种方法只会在<strong>不带</strong>有
+<code>lock</code> 前缀的指令时才会使用</li>
+<li>检测自旋锁：满足以下条件的自然循环会被识别为自旋锁，1）循环内至少存在一次读内存（<code>load</code>）；2）没有写内存（<code>store</code>）和函数调用（如usleep）；3）用于计算内存访问地址的所有寄存器必须是循环不变量，确保每次循环都从同一内存位置读取。被标记为自旋锁的循环内部所有的读内存访问（<code>load</code>）操作都视为带有获取（acquire）内存顺序的原子加载操作。接着要检测解锁操作，这通常表现为二进制可执行文件中的简单内存写（<code>store</code>）操作,这对于一般情况来说检测很困难。但是，典型的屏障实现会将解锁内存写（<code>store</code>）操作插入到与自旋锁本身相同的函数中，这允许
+BINTSAN
+检测到访问同一内存位置的解锁内存写（<code>store</code>）操作,并将其声明为带有释放(release)内存顺序的原子操作。</li>
+</ol>
+<h3 id="优化">优化</h3>
+<p>跳过这些检测：</p>
+<ol type="1">
+<li>只读内存，这永远是不会发生数据竞争的</li>
+<li>只在单个线程内使用的变量，如某个函数的局部变量。这里需要注意的是，对于一些别名指针的问题，这种情况是难以确认的，所以这里只考虑从未泄露过指向栈变量的指针情况。BINTSAN
+实现了一个函数局部分析,用于识别是否有指针被存储到内存或作为参数传递给其他函数调用。如果没有，则认为该函数内的所有栈访问都是线程安全的。</li>
+<li>BINTSAN 还可以安全地忽略一些编译器生成的内存访问，如栈指令(如
+push、pop、enter、leave、call 和
+ret)的隐式内存操作数，以及栈金丝雀(stack
+canaries)。金丝雀被检测为对常量偏移 0x28 处的线程局部存储的访问，这是
+GCC 和 Clang 使用的。</li>
+</ol>
+<p>减少性能开销：</p>
+<p><strong>"死"寄存器：</strong>一个寄存器一旦不被任何路径读取，就被认为是“死”的。</p>
+<p>ZIPR已经实现过一个STARS的寄存器分析器，但是没有考虑调用约定或者ABI(Application
+Binary
+Interface)，将函数调用标记为对所有寄存器的读写。所以BINTSAN自己实现了一个针对<strong>System
+V ABI</strong> 的自定义”死“寄存器分析，它还分析了SSE寄存器。</p>
+<blockquote>
+<p>[!NOTE]</p>
+<p>SSE(Streaming SIMD
+Extensions)寄存器是一组用于浮点运算和SIMD向量指令的寄存器。具体包括:</p>
+<ul>
+<li>xmm0到xmm15共16个寄存器</li>
+<li>每个寄存器大小为256字节</li>
+<li>这些寄存器主要用于浮点运算和SIMD向量指令</li>
+</ul>
+</blockquote>
+<p>具体实现上，通过跟踪每条指令前后寄存器的死活状态,并在函数内部传播这些信息来实现。如果一条指令读取了一个寄存器,则该寄存器在该指令之前是活的;如果一个寄存器被写入,则它在该指令之前是死的。</p>
+<blockquote>
+<p>[!NOTE]</p>
+<p><strong>System V ABI</strong> 指定寄存器
+<strong>rdi、rsi、rdx、rcx、r8 和 r9</strong>
+用于传递整数类的函数参数，而 <strong>r10</strong>
+可用于传递静态链指针，某些语言（如 Ada）使用该指针。</p>
+</blockquote>
+<p>所以在System V
+ABI中，如果没有更多的信息，函数的调用前这些寄存器都视为处于存活状态，但是，如何确定在函数调用中被写入的、在调用之前死的寄存器呢？</p>
+<blockquote>
+<p>[!IMPORTANT]</p>
+<p>虽然调用约定表明所有调用者保存的寄存器都可能被覆盖，但这并不总是正确的。问题是现代编译器的整个程序优化可能会识别这些情况并认为这些寄存器是活动的。也就是说,即使根据调用约定,某些寄存器应该被函数调用覆盖,但编译器的优化可能会发现这些寄存器的值实际上在函数调用后仍然会被使用,因此不能将它们标记为死寄存器。</p>
+</blockquote>
+<p>因此，BINTSAN通过<strong>调用图</strong>进行深度优先搜索来确定每个函数可能写入的寄存器。如果无法静态确定函数调用的目标了，比如虚函数调用或库函数调用，则认为所有寄存器都可能被写入。</p>
+<p>尾调用优化导致的跳转到其他函数也被视为常规函数调用。间接跳转被认为会写入所有寄存器。根据
+System V ABI,函数的返回值通过 rax、rdx 或 xmm0 寄存器传递,因此 ret
+指令被认为会读取这些寄存器。</p>
+<blockquote>
+<p>[!NOTE]</p>
+<p>尾调用(tail
+call)是一种编程语言中的优化技术。它指的是函数的最后一个操作是调用另一个函数,并且被调用函数的返回值就是当前函数的返回值。</p>
+<p>在这种情况下,编译器可以将当前函数的栈帧替换为被调用函数的栈帧,从而避免额外的栈帧分配和返回操作,提高程序的性能。</p>
+</blockquote>
+<blockquote>
+<p>[!CAUTION]</p>
+<p>BINTSAN 的自定义死寄存器分析依赖于 System V
+ABI。如果编译器优化破坏了这个
+ABI,分析可能就无法正常工作，这种情况下可以禁用该优化。</p>
+</blockquote>
+<p>上文提到的SSE寄存器对于BINTSAN来说是很严重的性能开销，因为对于TSAN运行时库来说，本身是不需要SSE寄存器的，所以BINTSAN在默认配置下使用了一个特殊编译的TSAN运行时库，限制了对XMM寄存器的使用。通过使用编译器选项<code>-mno-sse</code>禁止使用XMM寄存器，BINTSAN可以跳过为TSAN库函数保存和恢复这些寄存器的操作。</p>
+<p>但是这样不能完全禁用XMM寄存器，因为一些库函数(如printf())需要使用这些寄存器。因此,BINTSAN只对性能关键的TSAN函数禁用了SSE寄存器，并且只在检测到实际数据竞争时才保存和恢复这些寄存器。</p>
+<h2 id="实验部分">实验部分</h2>
+<ul>
+<li><p>RQ1：BINTSAN 对 COTS
+二进制文件的适用性如何？重写的二进制文件仍然正确吗？</p></li>
+<li><p>RQ2：BINTSAN
+能有效检测数据竞争吗？处理原子操作时有哪些权衡？</p></li>
+<li><p>RQ3：BINTSAN 的表现如何？它与基于编译器的 TSAN
+或动态二进制插桩工具相比如何？</p></li>
+<li><p>RQ4：在我们的实施中使用的优化有什么影响？</p></li>
+<li><p>RQ5：BINTSAN 是否与 TSAN或 AFL++ 等其他现有工具兼容？</p></li>
+</ul>
+<h3 id="对比对象">对比对象</h3>
+<p><a target="_blank" rel="noopener" href="https://valgrind.org/docs/manual/hg-manual.html">Helgrind</a>(版本
+3.18.1)
+作为比较对象，这是目前唯一其他活跃维护的针对二进制目标的动态数据竞争检测工具。AFL
+风格的覆盖率检测工具 ZAFL [34] (提交 f03ce79) 也被用于评估。</p>
+<h3 id="软硬件环境">软硬件环境</h3>
+<p>Intel Xeon Gold 5320 CPU和256 GB RAM的Ubuntu 22.04.1
+LTS系统上进行了评估,使用gcc 11.2.0进行编译。</p>
+<h3 id="数据集">数据集</h3>
+<p>41个应用程序</p>
+<figure>
+<img src="https://raw.githubusercontent.com/Ruoyyy/picgo/main/image-20241030164647509.png" alt="数据集">
+<figcaption aria-hidden="true">数据集</figcaption>
+</figure>
+<p>从文献（CONZZER，我之前分享过）中收集了我们的目标，并在 GitHub
+上搜索了短语“并行”、“多线程”和“命令行”。作者静态检查二进制文件是否包含多线程，并在调用目标时动态确认它是否实际使用。包括有和没有可用源代码的项目，以及有和没有图形用户界面的二进制文件（包括独立程序和库）。此外，作者还涵盖了像
+ffmpeg 这样的复杂应用程序（21 MB，3.7M
+条指令）。主要关注开源软件，以便直接比较 BINTSAN 和基于源代码的
+TSAN。为了模拟真实二进制文件的实际使用场景，作者按照开发人员的建议编译所有目标。值得注意的是，这通常包括更高的编译器优化级别，如
+<code>-O2</code> 和 <code>-O3</code>。</p>
+<h3 id="rq1正确性和可扩展性">RQ1：正确性和可扩展性</h3>
+<p>本文使用GitHub 项目
+c-testsuite进行重复测试和回归测试,以确保仪插桩后二进制文件的正确性。</p>
+<blockquote>
+<p>[!NOTE]</p>
+<p>c-testsuite 包含 220 个小型 C
+程序以及程序的预期输出。由于这些程序相当小,我们扩展了自动化测试集,包括
+Linux 核心实用程序 9.1 版本。这些程序大多有 200 到 1,000 行 C
+代码。除了两个例外,这些程序都可以与 BINTSAN 成功运行。</p>
+</blockquote>
+<p>第一个例外是一个内部使用 Valgrind 的测试用例,这与 TSAN
+不兼容。第二个例外是 TSAN 库中与 coreutils 库函数
+<code>aligned_alloc()</code>
+相关的已知错误。除了这些人工测试用例和测试套件,作者在评估过程中广泛地手动测试了真实世界数据集,其中包含了广泛的用例,如前所述。除了性能和引入的
+TSAN 行为外,我们没有发现插入代码后的行为有任何差异。</p>
+<h3 id="rq2在检测数据竞争方面的有效性">RQ2：在检测数据竞争方面的有效性</h3>
+<p>作者使用的是LLVM（15.0.0
+RC1）中的TSAN测试用例，包括330个测试用例，基线工具是gcc
+11.2.0的TSAN版本，对于这版本TSAN无法检测到的测试用例，作者将其排除在外，最后作者发现，有22个测试用例在使用BINTSAN时失败，具体原因如下：</p>
+<ul>
+<li>内联函数（2次）：TSAN会阻止生成rep
+string指令(如<code>memcpy()</code>)的函数内联,但BINTSAN无法控制编译过程,因此内联函数在生成的堆栈跟踪中不可见,导致两个测试用例误报失败,尽管BINTSAN正确检测到了数据竞争。</li>
+</ul>
+<blockquote>
+<p>[!NOTE]</p>
+<p>内联函数：将函数题直接插入到函数调用的位置，以提高程序执行效率，使用<code>inline</code>关键字，需要注意的是，编译器在执行的过程中，<strong>不总是将内联函数替换为其代码</strong>，编译器会有自己的优化考虑。</p>
+</blockquote>
+<ul>
+<li><p>原子加载/存储操作的识别问题（5次）：方法失败了</p></li>
+<li><p>无法推断内存顺序（6次）：多个测试用例使用特定的内存顺序进行同步，但BINTSAN无法从二进制中推断出使用的内存顺序,因此使用默认的内存顺序。</p></li>
+<li><p>无法从二进制中推断happens-before注解（2次）</p></li>
+<li><p>无法正确翻译计算得到的程序计数器（2次）：两个测试用例使用了线程sanitizer库中需要程序计数器的函数，但由于测试用例对程序计数器进行了计算，ZIPR无法正确地静态翻译地址，导致计算得到的程序计数器在重写后的二进制中无效。</p></li>
+<li><p>变量抑制(1次)：某些测试用例使用了TSAN的错误抑制功能,允许开发者临时抑制已知的bug。这个功能是在运行时库中实现的,但需要依赖于可执行文件的调试信息中包含所有被抑制对象的名称。而BINTSAN只能提供函数名的信息,无法获取变量名,因此会导致一个测试用例失败。</p></li>
+<li><p>虚函数表(4次)访问：源代码级的TSAN包含了对虚函数表的特殊处理,以便于调试。但在二进制级别上,对虚函数表的内存访问表现为常规的mov指令,无法与从结构体中读取函数指针区分开。因此BINTSAN无法模拟这种行为。</p></li>
+</ul>
+<p>另外，作者为了弥补，在测试用例中自己加入了17个自定义测试用例，专门测试BINTSAN的功能，如原子指令、rep字符串指令、尾调用转换等。除了这些人工测试用例，BINTSAN还评估了表1中列出的真实世界应用程序的数据竞争检测能力。对于有可用源代码的程序，BINTSAN将结果与基于源代码的TSAN进行比较。为了创建程序输入，BINTSAN使用了模糊测试或手动测试。对于GUI程序，BINTSAN使用一系列用户交互作为输入。由于由线程交织引起的数据竞争通常是非确定性的，BINTSAN对每个输入都运行三次，并将每个工具检测到的所有数据竞争报告进行<strong>合并、自动解析、指纹化（由访问类型(读或写)和导致数据竞争的初始访问以及产生竞争的函数名构成）和去重</strong>。</p>
+<figure>
+<img src="https://raw.githubusercontent.com/Ruoyyy/picgo/main/image-20241030175602968.png" alt="检测结果">
+<figcaption aria-hidden="true">检测结果</figcaption>
+</figure>
+<p>此表只列出了BINTSAN和TSAN的目标和结果，BINTSAN 或 TSAN
+检测到数据争用的目标。在我们的基准评估期间，BINTSAN 在 12
+个目标中检测到总共 958 个数据争用。其中 117 个由 TSAN
+完全相同地识别。对于大多数应用程序，TSAN 和 BINTSAN
+的输出相同或非常相似。</p>
+<blockquote>
+<p>[!CAUTION]</p>
+<p>这里ffmpeg需要单独拿出来讲，ffmpeg是最大的项目，所以检测到的问题最多，但漏报和误报也是最多的。主要是三个原因：1）不同运行中，检测到的data
+race存在很大差异，说明这个项目的线程交错而存在高度的不确定性。2）包含数据竞争的函数被从
+BINTSAN
+的堆栈跟踪中省略，这是由于编译器优化（如内联或尾部调用优化）造成的。3）ffmpeg存在大量的原子操作。</p>
+</blockquote>
+<p>但无论怎么说，BINTSAN还是表现出了超越其他检测器的效果。</p>
+<h4 id="启发式方法的效果">启发式方法的效果</h4>
+<figure>
+<img src="https://raw.githubusercontent.com/Ruoyyy/picgo/main/image-20241030202310950.png" alt="BINTSAN检测到的原子操作">
+<figcaption aria-hidden="true">BINTSAN检测到的原子操作</figcaption>
+</figure>
+<p>IR-Atomics 显示 LLVM-IR 中原子指令的数量。当使用 clang 14.0.0
+编译目标时，这与 LLVM-IR (Atomic-IR)
+中看到的原子指令数量进行了比较。</p>
+<blockquote>
+<p>[!CAUTION]</p>
+<p>请注意，由于编译器差异和优化可能会添加或删除原子指令，因此这种比较并不准确。为了降低这种不准确性，作者手动检查了每个启发式方法随机选择的
+20
+个已识别原子操作子集，以验证启发式方法是否正确识别了原子操作。由于所有手动检查的原子操作都被确认为正确，作者预计大多数原子操作都能被正确检测到。</p>
+</blockquote>
+<p>结果还表明，启发式方法容易出现一些误报，因为它们会检测 LLVM-IR
+中没有原子指令的目标（如 lrzip 和 x265）的原子操作。</p>
+<h3 id="rq3和tsan以及其他插桩器的比较">RQ3：和TSAN以及其他插桩器的比较</h3>
+<p>这里作者说，根据开发BINTSAN的原则，所以只要运行时性能更高，可以介绍插桩性能低。</p>
+<h4 id="插桩表现">插桩表现</h4>
+<p>使用BINTSAN来插桩两个基准套件的文件，在测试时，将编译和插桩限制在单个进程中，结果显示：</p>
+<ol type="1">
+<li><strong>插桩时间</strong>：BINTSAN的插桩时间平均比编译时间长5倍。与TSAN相比，BINTSAN的编译时间开销约为7%。BINTSAN的插桩时间与汇编指令数量呈线性关系，可以处理大型二进制文件。</li>
+<li><strong>二进制文件大小增长</strong>:插桩过程中，二进制文件平均增长237%，其中三分之二来自BINTSAN，其余来自ZIPR插桩过程本身。</li>
+</ol>
+<h4 id="运行表现">运行表现</h4>
+<p>BINTSAN的运行时性能评估如下：</p>
+<ol type="1">
+<li>所有基准测试目标都执行了5次，使用4个线程，并计算平均值作为评估结果。测试包括未经任何插桩的二进制文件、使用<strong>TSAN</strong>、<strong>BINTSAN</strong>，以及<strong>使用动态插桩工具Helgrind</strong>。</li>
+<li>如图所示，与未检测的二进制文件相比，TSAN
+的平均运行时开销最低，为18.0倍。BINTSAN的平均慢20.7倍，比TSAN慢1.15倍。</li>
+<li>动态插桩工具Helgrind的开销要高得多且不太稳定，慢了在17.1倍到491.1倍之间。Helgrind的平均慢了104.4，约为BINTSAN的5倍。需要注意的是，Helgrind在测试streamcluster时超时，结果被排除在外。</li>
+</ol>
+<figure>
+<img src="https://raw.githubusercontent.com/Ruoyyy/picgo/main/image-20241030204537042.png" alt="对比结果">
+<figcaption aria-hidden="true">对比结果</figcaption>
+</figure>
+<h3 id="优化的影响">优化的影响</h3>
+<figure>
+<img src="https://raw.githubusercontent.com/Ruoyyy/picgo/main/image-20241030205428610.png" alt="死寄存器造成的影响">
+<figcaption aria-hidden="true">死寄存器造成的影响</figcaption>
+</figure>
+<figure>
+<img src="https://raw.githubusercontent.com/Ruoyyy/picgo/main/image-20241030205512907.png" alt="优化的影响">
+<figcaption aria-hidden="true">优化的影响</figcaption>
+</figure>
+<ol type="1">
+<li>对于不同类型的内存访问，BINTSAN的优化效果如下:
+<ul>
+<li>平均有22.6%的内存访问可以安全地省略不插桩。</li>
+<li>最常见的优化对象是栈局部变量(SLV)访问，占总优化量的94.8%。</li>
+<li>栈金丝雀(SC)访问占5.0%,，常量内存读(CMR)访问最少。</li>
+<li>手工检查20个随机选取的优化对象，未发现错误分类。</li>
+</ul></li>
+<li>自定义死寄存器分析(DRA)的性能影响如下:
+<ul>
+<li>平均速度提升24.5%，优于ZIPR的STAR分析的15.7%。</li>
+</ul></li>
+<li>不使用默认编译的TSAN运行时库，BINTSAN的总体性能开销为25.3倍，比使用自定义运行时库高22.0%。</li>
+</ol>
+<h3 id="rq5兼容性">RQ5：兼容性</h3>
+<ol type="1">
+<li>BINTSAN与源代码级TSAN兼容性良好。
+BINTSAN可以对使用TSAN的库(如libQt5Core或libSwell)进行检测,与完全使用BINTSAN的情况下产生的结果相似。</li>
+<li>BINTSAN还与其他成熟的模糊测试工具兼容,在评估中使用了Zafl(USENIX
+security'21)的覆盖率检测和模糊测试工具链来生成数据竞争检测的测试用例。</li>
+<li>总的来说，BINTSAN与TSAN的性能开销相当(只高15%)，但在性能(开销降低5倍)和数据竞争检测能力(检测出32%更多的真实数据竞争)方面显著优于类似的二进制工具Helgrind。</li>
+</ol>
+<h2 id="限制">限制</h2>
+<h3 id="tsan局限">TSAN局限</h3>
+<p>缺乏对 Windows 的支持以及仅支持用户空间应用程序。</p>
+<h3 id="zipr限制">ZIPR限制</h3>
+<p>BINTSAN依赖于ZIPR重写框架,因此也继承了ZIPR的局限性。例如，如果ZIPR无法正确重写二进制可执行文件，BINTSAN插入的检测代码也会失败或产生错误的二进制文件。这在目标程序包含混淆、DRM机制、自修改代码或手写汇编时更容易发生。此外,ZIPR不支持一些旧版本编译器的特性,如gcc在C++11之前使用的动态异常。</p>
+<h3 id="bintsan自身的局限性">BINTSAN自身的局限性</h3>
+<ul>
+<li>BINTSAN的原型实现不支持x86-64架构的一些高级特性，如事务内存指令，会产生误报。同时，它也不支持512位AVX指令,因为这些指令在实践中很少出现，实现起来需要大量工程工作。</li>
+<li>BINTSAN采用静态插桩的方法，因此对于生成和执行代码的程序(如JIT编译器)无法正常工作，因为生成的代码没有被BINTSAN检测。</li>
+<li>BINTSAN实现的死寄存器分析假设函数调用遵循System V
+ABI标准，这可能并不总是正确的。不过,这个优化可以被禁用。</li>
+<li>clang使用了更新版本的TSAN，具有更好的运行时性能，但由于BINTSAN需要动态库,而clang没有提供，因此只能使用gcc的实现。</li>
+</ul>
+<h3 id="未来工作">未来工作</h3>
+<p>开发专门针对二进制的sanitizer，而不是简单地移植源代码级别的sanitizer。可能需要放弃与源代码版本的兼容性，而是开发自己的运行时检测机制。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Fuzzing/" rel="tag"># Fuzzing</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2024/09/27/%5BRuoyyy%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB%5DSEGFUZZ%20Segmentizing%20Thread%20Interleaving%20to%20%20Discover%20Kernel%20Concurrency%20Bugs%20through%20Fuzzing%EF%BC%88S&P'23%EF%BC%89/" rel="prev" title="【论文阅读】SEGFUZZ:Segmentizing Thread Interleaving to  Discover Kernel Concurrency Bugs through Fuzzing">
+      <i class="fa fa-chevron-left"></i> 【论文阅读】SEGFUZZ:Segmentizing Thread Interleaving to  Discover Kernel Concurrency Bugs through Fuzzing
+    </a></div>
+      <div class="post-nav-item"></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#ruoyyy%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BBa-binary-level-thread-sanitizer-or-why-sanitizing-on-the-binary-level-is-hardusenix-security24"><span class="nav-number">1.</span> <span class="nav-text">[Ruoyyy论文阅读]A
+Binary-level Thread Sanitizer or Why Sanitizing on the Binary Level is
+Hard（USENIX Security&#39;24）</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%91%98%E8%A6%81"><span class="nav-number">1.1.</span> <span class="nav-text">摘要</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#introduction"><span class="nav-number">1.2.</span> <span class="nav-text">Introduction</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%BA%8C%E8%BF%9B%E5%88%B6%E7%BA%A7%E5%88%AB%E7%9A%84sanitizer%E7%9A%84%E9%9A%BE%E5%BA%A6"><span class="nav-number">1.3.</span> <span class="nav-text">二进制级别的Sanitizer的难度</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AE%8C%E5%85%A8%E5%AD%98%E5%82%A8%E5%AE%9A%E5%BA%8Ftsototal-store-order%E6%A8%A1%E5%9E%8B"><span class="nav-number">1.3.1.</span> <span class="nav-text">完全存储定序（TSO:Total
+Store Order）模型</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#bintsanbinary-thread-sanitizer"><span class="nav-number">1.4.</span> <span class="nav-text">BINTSAN：binary thread
+sanitizer</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BA%8C%E8%BF%9B%E5%88%B6%E9%87%8D%E5%86%99%E6%A1%86%E6%9E%B6"><span class="nav-number">1.4.1.</span> <span class="nav-text">二进制重写框架</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E4%BB%80%E4%B9%88%E6%98%AF%E4%BA%8C%E8%BF%9B%E5%88%B6%E9%87%8D%E5%86%99%E6%8A%80%E6%9C%AF"><span class="nav-number">1.4.1.1.</span> <span class="nav-text">什么是二进制重写技术？</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%95%B0%E6%8D%AE%E7%AB%9E%E4%BA%89%E6%A3%80%E6%B5%8B"><span class="nav-number">1.4.2.</span> <span class="nav-text">数据竞争检测</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#instrumentation"><span class="nav-number">1.4.3.</span> <span class="nav-text">Instrumentation</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%8F%92%E6%A1%A9"><span class="nav-number">1.4.3.1.</span> <span class="nav-text">插桩</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%A4%8D%E6%9D%82%E7%9A%84x86_64%E6%8C%87%E4%BB%A4%E9%9B%86"><span class="nav-number">1.4.3.2.</span> <span class="nav-text">复杂的x86_64指令集</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%8A%B6%E6%80%81%E5%AD%98%E5%82%A8"><span class="nav-number">1.4.4.</span> <span class="nav-text">状态存储</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%87%BD%E6%95%B0%E8%B0%83%E7%94%A8%E8%BE%93%E5%87%BA"><span class="nav-number">1.4.5.</span> <span class="nav-text">函数调用输出</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C"><span class="nav-number">1.4.6.</span> <span class="nav-text">原子操作</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%90%AF%E5%8F%91%E5%BC%8F"><span class="nav-number">1.4.7.</span> <span class="nav-text">启发式</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BC%98%E5%8C%96"><span class="nav-number">1.4.8.</span> <span class="nav-text">优化</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AE%9E%E9%AA%8C%E9%83%A8%E5%88%86"><span class="nav-number">1.5.</span> <span class="nav-text">实验部分</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AF%B9%E6%AF%94%E5%AF%B9%E8%B1%A1"><span class="nav-number">1.5.1.</span> <span class="nav-text">对比对象</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%BD%AF%E7%A1%AC%E4%BB%B6%E7%8E%AF%E5%A2%83"><span class="nav-number">1.5.2.</span> <span class="nav-text">软硬件环境</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%95%B0%E6%8D%AE%E9%9B%86"><span class="nav-number">1.5.3.</span> <span class="nav-text">数据集</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#rq1%E6%AD%A3%E7%A1%AE%E6%80%A7%E5%92%8C%E5%8F%AF%E6%89%A9%E5%B1%95%E6%80%A7"><span class="nav-number">1.5.4.</span> <span class="nav-text">RQ1：正确性和可扩展性</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#rq2%E5%9C%A8%E6%A3%80%E6%B5%8B%E6%95%B0%E6%8D%AE%E7%AB%9E%E4%BA%89%E6%96%B9%E9%9D%A2%E7%9A%84%E6%9C%89%E6%95%88%E6%80%A7"><span class="nav-number">1.5.5.</span> <span class="nav-text">RQ2：在检测数据竞争方面的有效性</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%90%AF%E5%8F%91%E5%BC%8F%E6%96%B9%E6%B3%95%E7%9A%84%E6%95%88%E6%9E%9C"><span class="nav-number">1.5.5.1.</span> <span class="nav-text">启发式方法的效果</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#rq3%E5%92%8Ctsan%E4%BB%A5%E5%8F%8A%E5%85%B6%E4%BB%96%E6%8F%92%E6%A1%A9%E5%99%A8%E7%9A%84%E6%AF%94%E8%BE%83"><span class="nav-number">1.5.6.</span> <span class="nav-text">RQ3：和TSAN以及其他插桩器的比较</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%8F%92%E6%A1%A9%E8%A1%A8%E7%8E%B0"><span class="nav-number">1.5.6.1.</span> <span class="nav-text">插桩表现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E8%BF%90%E8%A1%8C%E8%A1%A8%E7%8E%B0"><span class="nav-number">1.5.6.2.</span> <span class="nav-text">运行表现</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BC%98%E5%8C%96%E7%9A%84%E5%BD%B1%E5%93%8D"><span class="nav-number">1.5.7.</span> <span class="nav-text">优化的影响</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#rq5%E5%85%BC%E5%AE%B9%E6%80%A7"><span class="nav-number">1.5.8.</span> <span class="nav-text">RQ5：兼容性</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%99%90%E5%88%B6"><span class="nav-number">1.6.</span> <span class="nav-text">限制</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#tsan%E5%B1%80%E9%99%90"><span class="nav-number">1.6.1.</span> <span class="nav-text">TSAN局限</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#zipr%E9%99%90%E5%88%B6"><span class="nav-number">1.6.2.</span> <span class="nav-text">ZIPR限制</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#bintsan%E8%87%AA%E8%BA%AB%E7%9A%84%E5%B1%80%E9%99%90%E6%80%A7"><span class="nav-number">1.6.3.</span> <span class="nav-text">BINTSAN自身的局限性</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%9C%AA%E6%9D%A5%E5%B7%A5%E4%BD%9C"><span class="nav-number">1.6.4.</span> <span class="nav-text">未来工作</span></a></li></ol></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Ruoyyy"
+      src="https://raw.githubusercontent.com/Ruoyyy/picgo/main/微信图片_20240922005457.jpg">
+  <p class="site-author-name" itemprop="name">Ruoyyy</p>
+  <div class="site-description" itemprop="description">My Blog</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">3</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">1</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2024</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Ruoyyy</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a>
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+      
+
+<script>
+  if (typeof MathJax === 'undefined') {
+    window.MathJax = {
+      loader: {
+        source: {
+          '[tex]/amsCd': '[tex]/amscd',
+          '[tex]/AMScd': '[tex]/amscd'
+        }
+      },
+      tex: {
+        inlineMath: {'[+]': [['$', '$']]},
+        tags: 'ams'
+      },
+      options: {
+        renderActions: {
+          findScript: [10, doc => {
+            document.querySelectorAll('script[type^="math/tex"]').forEach(node => {
+              const display = !!node.type.match(/; *mode=display/);
+              const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display);
+              const text = document.createTextNode('');
+              node.parentNode.replaceChild(text, node);
+              math.start = {node: text, delim: '', n: 0};
+              math.end = {node: text, delim: '', n: 0};
+              doc.math.push(math);
+            });
+          }, '', false],
+          insertedScript: [200, () => {
+            document.querySelectorAll('mjx-container').forEach(node => {
+              let target = node.parentNode;
+              if (target.nodeName.toLowerCase() === 'li') {
+                target.parentNode.classList.add('has-jax');
+              }
+            });
+          }, '', false]
+        }
+      }
+    };
+    (function () {
+      var script = document.createElement('script');
+      script.src = '//cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+      script.defer = true;
+      document.head.appendChild(script);
+    })();
+  } else {
+    MathJax.startup.document.state(0);
+    MathJax.texReset();
+    MathJax.typeset();
+  }
+</script>
+
+    
+
+  
+  <script src="//cdn.jsdelivr.net/npm/quicklink@1/dist/quicklink.umd.js"></script>
+  <script>
+      window.addEventListener('load', () => {
+      quicklink({
+        timeout : 3000,
+        priority: true,
+        ignores : [uri => uri.includes('#'),uri => uri === 'http://example.com/2024/10/30/[Ruoyyy%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB]A%20Binary-level%20Thread%20Sanitizer%20or%20Why%20Sanitizing%20on%20the%20Binary%20Level%20is%20Hard%EF%BC%88USENIX%20Security'24%EF%BC%89/',]
+      });
+      });
+  </script>
+
+</body>
+</html>
